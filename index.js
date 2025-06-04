@@ -1,9 +1,12 @@
 const express = require('express');
+const checkAuth = require('./middleware/auth');
 const db = require('./db');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+app.use(checkAuth); // 👈 protect all endpoints
+
 
 app.post('/webhook/sms', async (req, res) => {
   const { message_body, sender, secret_key } = req.body;
