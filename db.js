@@ -1,4 +1,4 @@
-// sms-parser/db.js
+// sms-inbound/db.js
 const { Pool } = require('pg');
 require('dotenv').config(); // ✅ Loads .env from current folder
 
@@ -10,7 +10,7 @@ const pool = new Pool({
 });
 
 pool.on('connect', () => {
-  console.log('📦 [sms-parser] Connected to PostgreSQL');
+  console.log('📦 [sms-inbound] Connected to PostgreSQL');
 });
 
 pool.on('error', (err) => {

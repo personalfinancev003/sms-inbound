@@ -9,34 +9,23 @@ app.use(checkAuth); // 👈 protect all endpoints
 
 
 app.post('/webhook/sms', async (req, res) => {
-  const { message_body, sender, secret_key } = req.body;
-  console.log('Incoming payload:', { message_body, sender, secret_key });
+  const { message_body, sender } = req.body;
+  console.log('Incoming payload:', { message_body, sender, account_id: req.account_id });
 
-  if (!message_body || !secret_key) {
-    console.log('❌ Missing required fields');
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!message_body) {
+    console.log('❌ Missing message_body');
+    return res.status(400).json({ error: 'Missing required field: message_body' });
   }
 
   try {
-    const result = await db.query(
-      'SELECT id FROM accounts WHERE secret_key = $1',
-      [secret_key]
-    );
-
-    if (result.rowCount === 0) {
-      console.log('❌ Invalid secret key');
-      return res.status(401).json({ error: 'Invalid secret key' });
-    }
-
-    const accountId = result.rows[0].id;
-
+    // Use account_id from middleware (already validated)
     await db.query(
       `INSERT INTO sms_messages (account_id, message_body, sender)
        VALUES ($1, $2, $3)`,
-      [accountId, message_body, sender]
+      [req.account_id, message_body, sender]
     );
 
-    console.log('✅ Message inserted');
+    console.log('✅ Message inserted for account:', req.account_id);
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Webhook error:', err);
