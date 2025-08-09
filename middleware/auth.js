@@ -6,7 +6,6 @@ module.exports = async function checkAuth(req, res, next) {
   // Ignore bearer tokens completely - only check secret_key
   
   if (!req.body || !req.body.secret_key) {
-    console.log('❌ No secret_key provided - ignoring request');
     return res.status(200).json({ message: 'Request ignored' });
   }
   
@@ -18,7 +17,6 @@ module.exports = async function checkAuth(req, res, next) {
     );
 
     if (result.rowCount === 0) {
-      console.log('❌ Invalid secret_key - rejecting request');
       return res.status(401).json({ error: 'Invalid secret_key' });
     }
 
@@ -26,7 +24,7 @@ module.exports = async function checkAuth(req, res, next) {
     req.account_id = result.rows[0].id;
     next();
   } catch (err) {
-    console.error('❌ Database error during secret_key validation:', err);
+    console.error('❌ Database error during secret_key validation');
     return res.status(500).json({ error: 'Internal server error' });
   }
 };

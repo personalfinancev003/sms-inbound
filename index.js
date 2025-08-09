@@ -10,10 +10,9 @@ app.use(checkAuth); // 👈 protect all endpoints
 
 app.post('/webhook/sms', async (req, res) => {
   const { message_body, sender } = req.body;
-  console.log('Incoming payload:', { message_body, sender, account_id: req.account_id });
+  // Do not log message content
 
   if (!message_body) {
-    console.log('❌ Missing message_body');
     return res.status(400).json({ error: 'Missing required field: message_body' });
   }
 
@@ -25,10 +24,9 @@ app.post('/webhook/sms', async (req, res) => {
       [req.account_id, message_body, sender]
     );
 
-    console.log('✅ Message inserted for account:', req.account_id);
     res.json({ success: true });
   } catch (err) {
-    console.error('❌ Webhook error:', err);
+    console.error('❌ Webhook error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
