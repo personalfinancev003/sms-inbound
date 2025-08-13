@@ -58,21 +58,20 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
   }
 
   try {
-    // Generate SMS ID
-    const smsId = `sms_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Insert with more details
+    // Insert only required fields - everything else is auto-populated
     const result = await db.query(
-      `INSERT INTO sms_messages (id, account_id, message_body, sender, processing_status, received_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO sms_messages (account_id, message_body, sender)
+       VALUES ($1, $2, $3)
        RETURNING id, received_at`,
-      [smsId, req.account_id, message_body, 'Mobile Automation', 'pending']
+      [req.account_id, message_body, 'Mobile Automation']
     );
+
+    const insertedSms = result.rows[0];
 
     res.json({
       ok: true,
       code: 'SMS_LOGGED',
-      id: smsId,
+      id: insertedSms.id,
       message: 'SMS successfully received and queued for processing.'
     });
   } catch (err) {
