@@ -63,10 +63,10 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
     
     // Insert with more details
     const result = await db.query(
-      `INSERT INTO sms_messages (id, account_id, message_body, sender, source, processing_status, received_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO sms_messages (id, account_id, message_body, sender, processing_status, received_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING id, received_at`,
-      [smsId, req.account_id, message_body, 'Mobile Automation', 'webhook', 'pending']
+      [smsId, req.account_id, message_body, 'Mobile Automation', 'pending']
     );
 
     res.json({
