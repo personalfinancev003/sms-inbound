@@ -71,6 +71,13 @@ const webhookAuth = async (req, res, next) => {
 app.post('/webhook/sms', webhookAuth, async (req, res) => {
   let { message_body } = req.body;
   
+  // Handle nested macrodroid format
+  if (message_body && typeof message_body === 'object' && message_body.message_body) {
+    console.log(`[POST /webhook/sms] 🤖 Detected nested macrodroid format`);
+    message_body = message_body.message_body;
+    console.log(`[POST /webhook/sms] 📱 Extracted inner message:`, message_body);
+  }
+  
   // Handle Android macrodroid format with base64 encoding
   if (!message_body && req.body.message_body_b64) {
     console.log(`[POST /webhook/sms] 🤖 Detected Android macrodroid format`);
