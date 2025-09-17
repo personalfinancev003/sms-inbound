@@ -69,13 +69,35 @@ const webhookAuth = async (req, res, next) => {
 
 // Webhook endpoint with header-based auth
 app.post('/webhook/sms', webhookAuth, async (req, res) => {
-  const { message_body } = req.body;
+  let { message_body } = req.body;
+  
+  // Handle Android macrodroid format with base64 encoding
+  if (!message_body && req.body.message_body_b64) {
+    console.log(`[POST /webhook/sms] 🤖 Detected Android macrodroid format`);
+    try {
+      if (req.body.encoding === 'base64') {
+        // Decode base64 content
+        const decodedBytes = Buffer.from(req.body.message_body_b64, 'base64');
+        message_body = decodedBytes.toString('utf8');
+        console.log(`[POST /webhook/sms] 📱 Decoded base64 message:`, message_body);
+      } else {
+        // Use as-is if not base64
+        message_body = req.body.message_body_b64;
+        console.log(`[POST /webhook/sms] 📱 Using raw message_body_b64:`, message_body);
+      }
+    } catch (err) {
+      console.log(`[POST /webhook/sms] ❌ Error decoding base64:`, err.message);
+    }
+  }
   
   // Comprehensive logging for debugging Android/iOS encoding differences
   console.log(`[POST /webhook/sms] Processing SMS for account ${req.account_id}`);
   console.log(`[POST /webhook/sms] === DEBUGGING RAW REQUEST ===`);
   console.log(`[POST /webhook/sms] Headers:`, JSON.stringify(req.headers, null, 2));
   console.log(`[POST /webhook/sms] Raw Body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[POST /webhook/sms] message_body variable type:`, typeof message_body);
+  console.log(`[POST /webhook/sms] message_body variable value:`, message_body);
+  console.log(`[POST /webhook/sms] req.body.message_body:`, req.body.message_body);
   console.log(`[POST /webhook/sms] Content-Type:`, req.headers['content-type']);
   console.log(`[POST /webhook/sms] User-Agent:`, req.headers['user-agent']);
   console.log(`[POST /webhook/sms] Content-Encoding:`, req.headers['content-encoding']);
@@ -85,8 +107,14 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
     console.log(`[POST /webhook/sms] Message Body Type:`, typeof message_body);
     console.log(`[POST /webhook/sms] Message Body (Raw):`, message_body);
     console.log(`[POST /webhook/sms] Message Body (JSON):`, JSON.stringify(message_body));
-    console.log(`[POST /webhook/sms] Message Body (Buffer):`, Buffer.from(message_body, 'utf8'));
-    console.log(`[POST /webhook/sms] Message Body (Hex):`, Buffer.from(message_body, 'utf8').toString('hex'));
+    
+    if (typeof message_body === 'string') {
+      console.log(`[POST /webhook/sms] Message Body (Buffer):`, Buffer.from(message_body, 'utf8'));
+      console.log(`[POST /webhook/sms] Message Body (Hex):`, Buffer.from(message_body, 'utf8').toString('hex'));
+    } else {
+      console.log(`[POST /webhook/sms] Message Body (Buffer): [Cannot convert object to Buffer]`);
+      console.log(`[POST /webhook/sms] Message Body (Hex): [Cannot convert object to hex]`);
+    }
     
     // Check for specific characters that might indicate encoding issues
     const hasArabic = /[\u0600-\u06FF]/.test(message_body);
