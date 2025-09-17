@@ -5,21 +5,28 @@ require('dotenv').config();
 
 const app = express();
 
-// Raw body capture middleware for debugging
-app.use('/webhook/sms', (req, res, next) => {
-  let rawBody = '';
-  req.on('data', chunk => {
-    rawBody += chunk.toString();
-  });
-  req.on('end', () => {
-    req.rawBody = rawBody;
-    console.log(`[RAW BODY CAPTURE] Raw request body:`, rawBody);
-    console.log(`[RAW BODY CAPTURE] Raw body length:`, rawBody.length);
-    console.log(`[RAW BODY CAPTURE] Raw body (hex):`, Buffer.from(rawBody, 'utf8').toString('hex'));
-    next();
-  });
+// Raw body capture middleware for debugging - must come before express.json()
+app.use('/webhook/sms', express.raw({ type: 'application/json' }), (req, res, next) => {
+  const rawBody = req.body.toString('utf8');
+  req.rawBody = rawBody;
+  
+  console.log(`[RAW BODY CAPTURE] Raw request body:`, rawBody);
+  console.log(`[RAW BODY CAPTURE] Raw body length:`, rawBody.length);
+  console.log(`[RAW BODY CAPTURE] Raw body (hex):`, req.body.toString('hex'));
+  
+  // Parse JSON manually so we have both raw and parsed versions
+  try {
+    req.body = JSON.parse(rawBody);
+    console.log(`[RAW BODY CAPTURE] Successfully parsed JSON`);
+  } catch (err) {
+    console.log(`[RAW BODY CAPTURE] ❌ JSON parse error:`, err.message);
+    req.body = {};
+  }
+  
+  next();
 });
 
+// Regular JSON middleware for other routes
 app.use(express.json());
 
 // Custom auth middleware for webhook endpoint using header
