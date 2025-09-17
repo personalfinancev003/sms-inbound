@@ -4,6 +4,22 @@ const db = require('./db');
 require('dotenv').config();
 
 const app = express();
+
+// Raw body capture middleware for debugging
+app.use('/webhook/sms', (req, res, next) => {
+  let rawBody = '';
+  req.on('data', chunk => {
+    rawBody += chunk.toString();
+  });
+  req.on('end', () => {
+    req.rawBody = rawBody;
+    console.log(`[RAW BODY CAPTURE] Raw request body:`, rawBody);
+    console.log(`[RAW BODY CAPTURE] Raw body length:`, rawBody.length);
+    console.log(`[RAW BODY CAPTURE] Raw body (hex):`, Buffer.from(rawBody, 'utf8').toString('hex'));
+    next();
+  });
+});
+
 app.use(express.json());
 
 // Custom auth middleware for webhook endpoint using header
@@ -47,7 +63,34 @@ const webhookAuth = async (req, res, next) => {
 // Webhook endpoint with header-based auth
 app.post('/webhook/sms', webhookAuth, async (req, res) => {
   const { message_body } = req.body;
+  
+  // Comprehensive logging for debugging Android/iOS encoding differences
   console.log(`[POST /webhook/sms] Processing SMS for account ${req.account_id}`);
+  console.log(`[POST /webhook/sms] === DEBUGGING RAW REQUEST ===`);
+  console.log(`[POST /webhook/sms] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[POST /webhook/sms] Raw Body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[POST /webhook/sms] Content-Type:`, req.headers['content-type']);
+  console.log(`[POST /webhook/sms] User-Agent:`, req.headers['user-agent']);
+  console.log(`[POST /webhook/sms] Content-Encoding:`, req.headers['content-encoding']);
+  
+  if (message_body) {
+    console.log(`[POST /webhook/sms] Message Body Length:`, message_body.length);
+    console.log(`[POST /webhook/sms] Message Body Type:`, typeof message_body);
+    console.log(`[POST /webhook/sms] Message Body (Raw):`, message_body);
+    console.log(`[POST /webhook/sms] Message Body (JSON):`, JSON.stringify(message_body));
+    console.log(`[POST /webhook/sms] Message Body (Buffer):`, Buffer.from(message_body, 'utf8'));
+    console.log(`[POST /webhook/sms] Message Body (Hex):`, Buffer.from(message_body, 'utf8').toString('hex'));
+    
+    // Check for specific characters that might indicate encoding issues
+    const hasArabic = /[\u0600-\u06FF]/.test(message_body);
+    const hasRTL = /[\u0590-\u08FF]/.test(message_body);
+    console.log(`[POST /webhook/sms] Contains Arabic chars:`, hasArabic);
+    console.log(`[POST /webhook/sms] Contains RTL chars:`, hasRTL);
+  } else {
+    console.log(`[POST /webhook/sms] ⚠️  Message body is missing/undefined/null`);
+    console.log(`[POST /webhook/sms] Body keys:`, Object.keys(req.body || {}));
+  }
+  console.log(`[POST /webhook/sms] === END DEBUG INFO ===`);
 
   if (!message_body) {
     return res.status(400).json({
@@ -58,15 +101,27 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
   }
 
   try {
+    console.log(`[POST /webhook/sms] === INSERTING TO DATABASE ===`);
+    console.log(`[POST /webhook/sms] Account ID:`, req.account_id);
+    console.log(`[POST /webhook/sms] Message to insert:`, message_body);
+    console.log(`[POST /webhook/sms] Message length:`, message_body.length);
+    
     // Insert only required fields - everything else is auto-populated
     const result = await db.query(
       `INSERT INTO sms_messages (account_id, message_body, sender)
        VALUES ($1, $2, $3)
-       RETURNING id, received_at`,
+       RETURNING id, received_at, message_body`,
       [req.account_id, message_body, 'Mobile Automation']
     );
 
     const insertedSms = result.rows[0];
+    
+    console.log(`[POST /webhook/sms] === DATABASE INSERT SUCCESS ===`);
+    console.log(`[POST /webhook/sms] Inserted SMS ID:`, insertedSms.id);
+    console.log(`[POST /webhook/sms] Received at:`, insertedSms.received_at);
+    console.log(`[POST /webhook/sms] Stored message body:`, insertedSms.message_body);
+    console.log(`[POST /webhook/sms] Stored message length:`, insertedSms.message_body?.length);
+    console.log(`[POST /webhook/sms] Message matches input:`, insertedSms.message_body === message_body);
 
     res.json({
       ok: true,
@@ -76,6 +131,8 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('❌ Webhook error:', err);
+    console.error('❌ Error details:', err.message);
+    console.error('❌ Error stack:', err.stack);
     res.status(500).json({
       ok: false,
       code: 'INTERNAL_ERROR',
