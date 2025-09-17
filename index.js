@@ -20,7 +20,23 @@ app.use('/webhook/sms', express.raw({ type: 'application/json' }), (req, res, ne
     console.log(`[RAW BODY CAPTURE] Successfully parsed JSON`);
   } catch (err) {
     console.log(`[RAW BODY CAPTURE] ❌ JSON parse error:`, err.message);
-    req.body = {};
+    console.log(`[RAW BODY CAPTURE] Attempting to fix malformed JSON...`);
+    
+    // Try to fix common JSON issues with SMS content (unescaped newlines)
+    try {
+      // Replace unescaped newlines in string values with escaped ones
+      const fixedJson = rawBody.replace(/"([^"]*)"(\s*[,}])/g, (match, content, suffix) => {
+        const escapedContent = content.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        return `"${escapedContent}"${suffix}`;
+      });
+      
+      console.log(`[RAW BODY CAPTURE] Fixed JSON attempt:`, fixedJson);
+      req.body = JSON.parse(fixedJson);
+      console.log(`[RAW BODY CAPTURE] ✅ Successfully parsed fixed JSON`);
+    } catch (fixErr) {
+      console.log(`[RAW BODY CAPTURE] ❌ Fixed JSON parse also failed:`, fixErr.message);
+      req.body = {};
+    }
   }
   
   next();
