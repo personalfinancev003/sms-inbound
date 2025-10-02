@@ -103,7 +103,7 @@ const webhookAuth = async (req, res, next) => {
 
 // Webhook endpoint with header-based auth
 app.post('/webhook/sms', webhookAuth, async (req, res) => {
-  let { message_body } = req.body;
+  let { message_body, created_at } = req.body;
   
   // Handle nested macrodroid format
   if (message_body && typeof message_body === 'object' && message_body.message_body) {
@@ -140,6 +140,26 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
       if (DEBUG_MODE) {
         console.log(`[POST /webhook/sms] ❌ Error decoding base64:`, err.message);
       }
+    }
+  }
+  
+  // Handle optional created_at datetime
+  let parsedDateTime = null;
+  if (created_at) {
+    // Expected format: "2024-09-01 5:19:36"
+    const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})$/;
+    const match = created_at.match(dateTimeRegex);
+    
+    if (match) {
+      const [_, year, month, day, hour, minute, second] = match;
+      // Format to PostgreSQL timestamp format
+      parsedDateTime = `${year}-${month}-${day} ${hour.padStart(2, '0')}:${minute}:${second}`;
+      
+      if (DEBUG_MODE) {
+        console.log(`[POST /webhook/sms] Parsed datetime:`, parsedDateTime);
+      }
+    } else {
+      console.warn(`[POST /webhook/sms] Invalid datetime format provided:`, created_at);
     }
   }
   
@@ -198,15 +218,25 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
       console.log(`[POST /webhook/sms] Account ID:`, req.account_id);
       console.log(`[POST /webhook/sms] Message to insert:`, message_body);
       console.log(`[POST /webhook/sms] Message length:`, message_body.length);
+      if (parsedDateTime) {
+        console.log(`[POST /webhook/sms] Created at override:`, parsedDateTime);
+      }
     }
     
-    // Insert only required fields - everything else is auto-populated
-    const result = await db.query(
-      `INSERT INTO sms_messages (account_id, message_body, sender)
-       VALUES ($1, $2, $3)
-       RETURNING id, received_at, message_body`,
-      [req.account_id, message_body, 'Mobile Automation']
-    );
+    // Build dynamic query based on whether created_at is provided
+    const insertQuery = parsedDateTime
+      ? `INSERT INTO sms_messages (account_id, message_body, sender, created_at)
+         VALUES ($1, $2, $3, $4::timestamp)
+         RETURNING id, received_at, message_body, created_at`
+      : `INSERT INTO sms_messages (account_id, message_body, sender)
+         VALUES ($1, $2, $3)
+         RETURNING id, received_at, message_body, created_at`;
+    
+    const insertParams = parsedDateTime
+      ? [req.account_id, message_body, 'Mobile Automation', parsedDateTime]
+      : [req.account_id, message_body, 'Mobile Automation'];
+    
+    const result = await db.query(insertQuery, insertParams);
 
     const insertedSms = result.rows[0];
     
@@ -216,6 +246,7 @@ app.post('/webhook/sms', webhookAuth, async (req, res) => {
     if (DEBUG_MODE) {
       console.log(`[POST /webhook/sms] === DATABASE INSERT SUCCESS ===`);
       console.log(`[POST /webhook/sms] Received at:`, insertedSms.received_at);
+      console.log(`[POST /webhook/sms] Created at:`, insertedSms.created_at || 'default (now())');
       console.log(`[POST /webhook/sms] Stored message body:`, insertedSms.message_body);
       console.log(`[POST /webhook/sms] Stored message length:`, insertedSms.message_body?.length);
       console.log(`[POST /webhook/sms] Message matches input:`, insertedSms.message_body === message_body);
